@@ -9,6 +9,11 @@ from deepgram import (
     SpeakWSOptions,
 )
 from dotenv import load_dotenv
+from PIL import Image
+from io import BytesIO
+import base64
+import requests
+
 
 # Load environment variables (API keys)
 load_dotenv()
@@ -21,7 +26,7 @@ generation_config = {
     "temperature": 1,
     "top_p": 0.95,
     "top_k": 64,
-    "max_output_tokens": 8192,
+    "max_output_tokens": 25000,
     "response_mime_type": "text/plain",
 }
 model = genai.GenerativeModel(
@@ -116,13 +121,22 @@ def forward_user_based_on_choice(result):
     else:
         return jsonify({"error": "Sorry, I couldn't understand the recommendation."})
 
+def encode_image(image):
+    if image.mode == 'RGBA':
+        image = image.convert('RGB')
+    
+    buffered = BytesIO()
+    image.save(buffered, format="JPEG")
+    return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
 # Main chatbot route (frontend)
 @app.route('/')
 def index():
     return render_template('index.html')
 
-
+@app.route('/start')
+def start():
+    return render_template('start.html')
 # Chatbot response route (backend logic)
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -168,19 +182,22 @@ def recycle():
 
 @app.route('/submit-image', methods=['POST'])
 def submit_image():
+    # Extract and decode the image from the request
     image_data = request.json['image']
     image_data = image_data.split(",")[1]  # Remove the base64 header
     image = Image.open(BytesIO(base64.b64decode(image_data)))
 
-    # Encode image for API
+    # Encode the image to base64
     base64_img = encode_image(image)
 
+    # Setup API headers with API key from environment variables
+    hyperbolic_api_key = os.getenv("HYPERBOLIC_API_KEY")
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {llm_api_key}",
+        "Authorization": f"Bearer {hyperbolic_api_key}",
     }
 
-    # Payload for the LLM API
+    # Create the payload to send to the API for the recycling suggestion
     payload = {
         "messages": [
             {
@@ -193,7 +210,7 @@ def submit_image():
                     },
                     {
                         "type": "text",
-                        "text": "Based on the product, provide the best recycling recommendation and calculate the amount of CO2 emissions that can be reduced if this product is properly recycled."
+                        "text": "Based on the product, provide a list and instructions of ways to recycle it. Also, calculate the amount of CO2 emissions that can be reduced if this product is properly recycled."
                     }
                 ],
             }
@@ -204,21 +221,24 @@ def submit_image():
         "top_p": 0.9,
     }
 
-    # Call the LLM API
+    # Call the API to get the recycling suggestions
     response = requests.post("https://api.hyperbolic.xyz/v1/chat/completions", headers=headers, json=payload)
     result = response.json()
 
-    # Extract the recommendation and emission reduction from the API response
+    # Process the response to extract the recycling suggestions and CO2 emissions reduction
     try:
         recycling_suggestion = result['choices'][0]['message']['content']
-        emissions_reduction = "Unknown"  # Adjust this depending on how the LLM returns it
+        emissions_reduction = "Unknown"
+        
+        # Search for CO2 emissions reduction details in the response
         for line in recycling_suggestion.split("\n"):
             if "CO2" in line:
                 emissions_reduction = line
     except KeyError:
-        recycling_suggestion = "Sorry, something went wrong with the LLM response."
+        recycling_suggestion = "Sorry, something went wrong with the API response."
         emissions_reduction = "Unknown"
 
+    # Return the recycling suggestions and emissions reduction data as a JSON response
     return jsonify({
         "recycling_suggestion": recycling_suggestion,
         "emissions_reduction": emissions_reduction

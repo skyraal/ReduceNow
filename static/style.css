@@ -1,5 +1,6 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 body {
-    font-family: Arial, sans-serif;
+    font-family: "Inter", sans-serif;
     background-color: #f4f4f4;
     margin: 0;
     padding: 20px;
@@ -57,3 +58,55 @@ button {
     border-radius: 5px;
     cursor: pointer;
 }
+
+.startbutton {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: #10B27E;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 25px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    width: 200px;
+    margin-left: 35px;
+    margin-top: -10px;
+}
+
+.startbutton:hover {
+    background-color: #45a049;
+}
+
+.home-container{
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100%;
+    background-image: url('../static/image/ReduceNow-3.png');
+    background-repeat: no-repeat;
+    background-size: cover;
+    margin: 0;
+    justify-content: left;
+}
+
+.logo-container {
+    text-align: left;
+    display: flex;
+    justify-content: left;
+    flex-direction: column;
+    margin-left: 120px;
+}
+
+.typography {
+    margin-top: -150px;
+    margin-left: 36px;
+    font-size: 36px;
+}
+.logo {
+    width: 748px;
+    height: 440px;
+    flex-shrink: 0;
+}
+
+
