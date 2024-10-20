@@ -1,15 +1,53 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Recycling Tips</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recycling Camera</title>
 </head>
 <body>
-    <h1>Recycling Tips</h1>
-    <p>Here are some ways you can start recycling at home:</p>
-    <ul>
-        <li>Separate recyclables from trash.</li>
-        <li>Find out what materials are recyclable in your area.</li>
-        <li>Set up designated bins for recyclables.</li>
-    </ul>
+    <h1>Take a Picture of Your Product</h1>
+    <video id="video" width="640" height="480" autoplay></video>
+    <button id="snap">Capture</button>
+    <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+    <button id="submit" style="display:none;">Submit for Recycling Recommendation</button>
+
+    <script>
+        // Access the camera and start streaming
+        const video = document.getElementById('video');
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            });
+
+        // Capture the image and draw it on a hidden canvas
+        const canvas = document.getElementById('canvas');
+        const snapButton = document.getElementById('snap');
+        const submitButton = document.getElementById('submit');
+        snapButton.addEventListener('click', () => {
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            snapButton.style.display = "none";
+            submitButton.style.display = "block";
+        });
+
+        // Convert the canvas image to Base64 and send it to the server
+        submitButton.addEventListener('click', () => {
+            const dataUrl = canvas.toDataURL('image/png');
+            
+            fetch('/submit-image', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ image: dataUrl })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.recycling_suggestion);
+                window.location.href = `/thank-you?emissions=${data.emissions_reduction}`;
+            });
+        });
+    </script>
 </body>
 </html>

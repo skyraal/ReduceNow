@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Emission Reduction Chatbot</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="../static/style.css">
 </head>
 <body>
     <h1>Emission Reduction Chatbot</h1>
@@ -43,7 +43,7 @@
             })
             .then(response => response.json())
             .then(data => {
-                // Check if the response is a recommendation (e.g., recycling, electricity, fuel)
+                // Append chatbot's response to the chatbox
                 const botMessage = document.createElement('div');
                 botMessage.classList.add('message', 'bot');
                 botMessage.textContent = data.response;
@@ -51,6 +51,10 @@
 
                 // Scroll chatbox to the bottom
                 messages.scrollTop = messages.scrollHeight;
+
+                // Play the Deepgram TTS audio
+                const audio = new Audio(data.audio_url);
+                audio.play();
 
                 // If the response contains one of the key recommendations, redirect to the corresponding page
                 if (data.response.toLowerCase().includes('recycling')) {
