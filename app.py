@@ -27,12 +27,12 @@ model = genai.GenerativeModel(
 app = Flask(__name__)
 
 # Function to forward user based on the result
-def forward_user_based_on_choice(choice):
-    if choice.lower() == "recycling":
+def forward_user_based_on_choice(result):
+    if "recycling" in result.lower():
         return redirect(url_for('recycle'))
-    elif choice.lower() == "electricity":
+    elif "electricity" in result.lower():
         return redirect(url_for('electricity'))
-    elif choice.lower() == "fuel":
+    elif "fuel" in result.lower():
         return redirect(url_for('fuel'))
     else:
         return jsonify({"error": "Sorry, I couldn't understand the recommendation."})
@@ -53,7 +53,19 @@ def chat():
             {
                 "role": "user",
                 "parts": [
-                    "In three questions or less, you are trying to see which method of reducing emissions is most suitable for the users: Recycling, Reducing electricity consumption, or Reducing fuel use. After three questions return the recommendation in one word recycle, fuel, or electricity."
+                    """
+                    You are a sustainability expert tasked with helping individuals reduce their carbon footprint.
+                    Your goal is to ask the user five or less behavioral questions to determine which method of reducing emissions is most suitable for them: 
+                    1. Recycling waste
+                    2. Reducing electricity consumption
+                    3. Reducing fuel use.
+
+                    Ask each question one at a time, evaluating the user's preferences, habits, and comfort with each method.
+                    After the third question, make a recommendation based on the user's responses, answer with one of the following options: 
+                    Recycling, electricity, or fuel.
+
+                    Answer only in plain text with no *asterisks* or _underscores_.
+                    """
                 ],
             },
         ]
@@ -62,6 +74,8 @@ def chat():
     # Send user's input to Gemini and get the response
     response = chat_session.send_message(user_input)
     result = response.text
+
+    # Return the result to the frontend
     return jsonify({"response": result})
 
 # Redirect routes after final decision
