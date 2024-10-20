@@ -1,110 +1,240 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, jsonify, request, redirect, url_for
 import os
-import base64
-import asyncio
-from deepgram import Deepgram
 import google.generativeai as genai
+from deepgram.utils import verboselogs
+from deepgram import (
+    DeepgramClient,
+    DeepgramClientOptions,
+    SpeakWebSocketEvents,
+    SpeakWSOptions,
+)
+from dotenv import load_dotenv
 
+# Load environment variables (API keys)
+load_dotenv()
+
+# Configure the API keys for Gemini and Deepgram
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+# Initialize the Gemini chat session
+generation_config = {
+    "temperature": 1,
+    "top_p": 0.95,
+    "top_k": 64,
+    "max_output_tokens": 8192,
+    "response_mime_type": "text/plain",
+}
+model = genai.GenerativeModel(
+    model_name="gemini-1.5-pro",
+    generation_config=generation_config,
+)
+
+# Flask app initialization
 app = Flask(__name__)
 
-# Set your API keys
-DEEPGRAM_API_KEY = os.getenv('DEEPGRAM_API_KEY') or 'YOUR_DEEPGRAM_API_KEY'
-GOOGLE_GEMINI_API_KEY = os.getenv('GOOGLE_GEMINI_API_KEY') or 'YOUR_GOOGLE_GEMINI_API_KEY'
+# Function to connect to Deepgram WebSocket TTS and play audio
+def text_to_speech_via_websocket(text):
+    TTS_TEXT = text
+    global warning_notice
+    warning_notice = True
 
-# Initialize Google Gemini
-genai.configure(api_key=GOOGLE_GEMINI_API_KEY)
+    try:
+        # Create a Deepgram client
+        config = DeepgramClientOptions(
+            options={"speaker_playback": "true"},
+        )
+        deepgram = DeepgramClient("", config)
 
-# Initialize Deepgram
-deepgram = Deepgram(DEEPGRAM_API_KEY)
+        # Create a WebSocket connection to Deepgram
+        dg_connection = deepgram.speak.websocket.v("1")
 
+        # WebSocket event handlers
+        def on_open(self, open, **kwargs):
+            print(f"WebSocket opened: {open}")
+
+        def on_binary_data(self, data, **kwargs):
+            global warning_notice
+            if warning_notice:
+                print("Received binary data")
+                warning_notice = False
+            # Here you can handle the binary data for audio (stream to a player or save to a file)
+
+        def on_metadata(self, metadata, **kwargs):
+            print(f"Metadata received: {metadata}")
+
+        def on_close(self, close, **kwargs):
+            print(f"Connection closed: {close}")
+
+        def on_error(self, error, **kwargs):
+            print(f"Error occurred: {error}")
+
+        # Register WebSocket event handlers
+        dg_connection.on(SpeakWebSocketEvents.Open, on_open)
+        dg_connection.on(SpeakWebSocketEvents.AudioData, on_binary_data)
+        dg_connection.on(SpeakWebSocketEvents.Metadata, on_metadata)
+        dg_connection.on(SpeakWebSocketEvents.Close, on_close)
+        dg_connection.on(SpeakWebSocketEvents.Error, on_error)
+
+        # Start WebSocket connection with specified options
+        options = SpeakWSOptions(
+            model="aura-asteria-en",  # Select the voice model
+            encoding="linear16",  # Audio encoding
+            sample_rate=16000,  # Sample rate for audio
+        )
+
+        if dg_connection.start(options) is False:
+            print("Failed to start WebSocket connection")
+            return
+
+        # Send text to Deepgram for TTS conversion
+        dg_connection.send_text(TTS_TEXT)
+
+        # Flush the WebSocket connection (mandatory)
+        dg_connection.flush()
+
+        # Wait for WebSocket to complete
+        dg_connection.wait_for_complete()
+
+        # Close the connection
+        dg_connection.finish()
+
+        return "Audio played successfully"
+
+    except Exception as e:
+        print(f"An error occurred during WebSocket TTS: {e}")
+        return None
+
+
+# Function to forward user based on the result
+def forward_user_based_on_choice(result):
+    if "recycling" in result.lower():
+        return redirect(url_for('recycle'))
+    elif "electricity" in result.lower():
+        return redirect(url_for('electricity'))
+    elif "fuel" in result.lower():
+        return redirect(url_for('fuel'))
+    else:
+        return jsonify({"error": "Sorry, I couldn't understand the recommendation."})
+
+
+# Main chatbot route (frontend)
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/ask_question', methods=['POST'])
-def ask_question():
-    # Get the audio data from the request
-    audio_data = request.files['audio_data'].read()
-    print(f"Received audio data of length {len(audio_data)} bytes")
 
-    # Transcribe audio using Deepgram SDK
-    transcript = asyncio.run(transcribe_audio(audio_data))
+# Chatbot response route (backend logic)
+@app.route('/chat', methods=['POST'])
+def chat():
+    user_input = request.json['message']
 
-    # Process the transcript with Google Gemini
-    response_text, action = process_transcript(transcript)
+    # Start a chat session with Gemini
+    chat_session = model.start_chat(
+        history=[
+            {
+                "role": "user",
+                "parts": [
+                    """
+                    You are a sustainability expert tasked with helping individuals reduce their carbon footprint.
+                    Your goal is to ask the user five or less behavioral questions to determine which method of reducing emissions is most suitable for them: 
+                    1. Recycling waste
+                    2. Reducing electricity consumption
+                    3. Reducing fuel use.
 
-    # Synthesize the response using Deepgram SDK
-    audio_response = asyncio.run(synthesize_speech(response_text))
+                    Ask each question one at a time, evaluating the user's preferences, habits, and comfort with each method.
+                    After the fifth question, make a recommendation based on the user's responses, answer with one of the following options: 
+                    Recycling, electricity, or fuel. Do not use the word recycle, electricity, or fuel in the five questions.
+                    """
+                ],
+            },
+        ]
+    )
 
-    # Return the response as JSON
-    return jsonify({
-        'response_text': response_text,
-        'audio_response': base64.b64encode(audio_response).decode('utf-8'),
-        'action': action
-    })
+    # Send user's input to Gemini and get the response
+    response = chat_session.send_message(user_input)
+    result = response.text
 
+    # Convert the chatbot's text to speech using Deepgram WebSocket TTS
+    tts_result = text_to_speech_via_websocket(result)
+
+    # Return the chatbot result and TTS result to the frontend
+    return jsonify({"response": result, "tts_result": tts_result})
+
+
+# Redirect routes after final decision
 @app.route('/recycle')
 def recycle():
     return render_template('recycle.html')
 
-@app.route('/reduce-electricity')
-def reduce_electricity():
-    return render_template('reduce_electricity.html')
+@app.route('/submit-image', methods=['POST'])
+def submit_image():
+    image_data = request.json['image']
+    image_data = image_data.split(",")[1]  # Remove the base64 header
+    image = Image.open(BytesIO(base64.b64decode(image_data)))
 
-@app.route('/reduce-fuel')
-def reduce_fuel():
-    return render_template('reduce_fuel.html')
+    # Encode image for API
+    base64_img = encode_image(image)
 
-async def transcribe_audio(audio_data):
-    source = {
-        'buffer': audio_data,
-        'mimetype': 'audio/webm'  # Ensure this matches the audio format
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {llm_api_key}",
     }
-    options = {
-        'punctuate': True,
-        'model': 'nova'
+
+    # Payload for the LLM API
+    payload = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What is this image?"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"},
+                    },
+                    {
+                        "type": "text",
+                        "text": "Based on the product, provide the best recycling recommendation and calculate the amount of CO2 emissions that can be reduced if this product is properly recycled."
+                    }
+                ],
+            }
+        ],
+        "model": "meta-llama/Llama-3.2-90B-Vision-Instruct",
+        "max_tokens": 2048,
+        "temperature": 0.7,
+        "top_p": 0.9,
     }
-    response = await deepgram.transcription.prerecorded(source, options)
-    transcript = response['results']['channels'][0]['alternatives'][0]['transcript']
-    return transcript
 
-def process_transcript(transcript):
-    # Use Google Gemini to process the transcript and generate a response
-    prompt = f"""You are an empathetic assistant helping users reduce emissions. Based on the following user input, guide them towards one of the following actions: recycling, reducing electricity consumption, or reducing fuel use.
+    # Call the LLM API
+    response = requests.post("https://api.hyperbolic.xyz/v1/chat/completions", headers=headers, json=payload)
+    result = response.json()
 
-User input: "{transcript}"
+    # Extract the recommendation and emission reduction from the API response
+    try:
+        recycling_suggestion = result['choices'][0]['message']['content']
+        emissions_reduction = "Unknown"  # Adjust this depending on how the LLM returns it
+        for line in recycling_suggestion.split("\n"):
+            if "CO2" in line:
+                emissions_reduction = line
+    except KeyError:
+        recycling_suggestion = "Sorry, something went wrong with the LLM response."
+        emissions_reduction = "Unknown"
 
-Remember to be supportive and non-judgmental, and provide positive reinforcement. At the end, recommend one of the actions.
+    return jsonify({
+        "recycling_suggestion": recycling_suggestion,
+        "emissions_reduction": emissions_reduction
+    })
 
-Your response should be concise."""
 
-    response = genai.generate_text(
-    model='models/gemini-1.5-flash',
-    prompt=prompt
-)
-    response_text = response.result
+@app.route('/electricity')
+def electricity():
+    return render_template('electricity.html')
 
-    # Determine which action was recommended
-    if 'recycling' in response_text.lower():
-        action = 'recycle'
-    elif 'electricity' in response_text.lower():
-        action = 'reduce-electricity'
-    elif 'fuel' in response_text.lower():
-        action = 'reduce-fuel'
-    else:
-        # Default action
-        action = 'recycle'
+@app.route('/fuel')
+def fuel():
+    return render_template('fuel.html')
 
-    return response_text, action
 
-async def synthesize_speech(text):
-    # Deepgram TTS using SDK
-    response = await deepgram.tts.synthesize(
-        text=text,
-        voice='en-US-AsteriaNeural'  # Adjust the voice ID if necessary
-    )
-    audio_content = response
-    return audio_content
 
+# Run the Flask app
 if __name__ == '__main__':
     app.run(debug=True)

@@ -6,11 +6,13 @@
     <title>Recycling Camera</title>
 </head>
 <body>
-    <h1>Take a Picture of Your Product</h1>
+    <h1>Take a Picture of Your Product for Recycling Recommendations</h1>
     <video id="video" width="640" height="480" autoplay></video>
     <button id="snap">Capture</button>
     <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
     <button id="submit" style="display:none;">Submit for Recycling Recommendation</button>
+
+    <div id="result" style="margin-top: 20px;"></div>
 
     <script>
         // Access the camera and start streaming
@@ -24,6 +26,7 @@
         const canvas = document.getElementById('canvas');
         const snapButton = document.getElementById('snap');
         const submitButton = document.getElementById('submit');
+        const resultDiv = document.getElementById('result');
         snapButton.addEventListener('click', () => {
             const context = canvas.getContext('2d');
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -33,21 +36,22 @@
 
         // Convert the canvas image to Base64 and send it to the server
         submitButton.addEventListener('click', () => {
-            const dataUrl = canvas.toDataURL('image/png');
-            
-            fetch('/submit-image', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ image: dataUrl })
-            })
-            .then(response => response.json())
-            .then(data => {
-                alert(data.recycling_suggestion);
-                window.location.href = `/thank-you?emissions=${data.emissions_reduction}`;
-            });
+        const dataUrl = canvas.toDataURL('image/png');
+        
+        fetch('/submit-image', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ image: dataUrl })
+        })
+        .then(response => response.json())
+        .then(data => {
+            const emissions_reduction = data.emissions_reduction;
+            // Redirect to the thank you page with the emissions data as a URL parameter
+            window.location.href = `/thank-you?emissions=${encodeURIComponent(emissions_reduction)}`;
         });
+    });
     </script>
 </body>
 </html>

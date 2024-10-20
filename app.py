@@ -166,6 +166,65 @@ def chat():
 def recycle():
     return render_template('recycle.html')
 
+@app.route('/submit-image', methods=['POST'])
+def submit_image():
+    image_data = request.json['image']
+    image_data = image_data.split(",")[1]  # Remove the base64 header
+    image = Image.open(BytesIO(base64.b64decode(image_data)))
+
+    # Encode image for API
+    base64_img = encode_image(image)
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {llm_api_key}",
+    }
+
+    # Payload for the LLM API
+    payload = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What is this image?"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"},
+                    },
+                    {
+                        "type": "text",
+                        "text": "Based on the product, provide the best recycling recommendation and calculate the amount of CO2 emissions that can be reduced if this product is properly recycled."
+                    }
+                ],
+            }
+        ],
+        "model": "meta-llama/Llama-3.2-90B-Vision-Instruct",
+        "max_tokens": 2048,
+        "temperature": 0.7,
+        "top_p": 0.9,
+    }
+
+    # Call the LLM API
+    response = requests.post("https://api.hyperbolic.xyz/v1/chat/completions", headers=headers, json=payload)
+    result = response.json()
+
+    # Extract the recommendation and emission reduction from the API response
+    try:
+        recycling_suggestion = result['choices'][0]['message']['content']
+        emissions_reduction = "Unknown"  # Adjust this depending on how the LLM returns it
+        for line in recycling_suggestion.split("\n"):
+            if "CO2" in line:
+                emissions_reduction = line
+    except KeyError:
+        recycling_suggestion = "Sorry, something went wrong with the LLM response."
+        emissions_reduction = "Unknown"
+
+    return jsonify({
+        "recycling_suggestion": recycling_suggestion,
+        "emissions_reduction": emissions_reduction
+    })
+
+
 @app.route('/electricity')
 def electricity():
     return render_template('electricity.html')
@@ -173,6 +232,7 @@ def electricity():
 @app.route('/fuel')
 def fuel():
     return render_template('fuel.html')
+
 
 
 # Run the Flask app
