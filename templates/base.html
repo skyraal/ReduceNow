@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emission Reduction Assistant</title>
+</head>
+<body>
+    <h1>Reduce Your Emissions</h1>
+    <p>Talk to our assistant and get personalized recommendations for reducing your emissions.</p>
+    
+    <button id="record-btn">Record</button>
+    <audio id="response-audio" controls></audio>
+
+    <script>
+        const recordBtn = document.getElementById('record-btn');
+        const responseAudio = document.getElementById('response-audio');
+
+        let mediaRecorder;
+        let audioChunks = [];
+
+        recordBtn.addEventListener('click', () => {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        mediaRecorder = new MediaRecorder(stream);
+                        mediaRecorder.start();
+
+                        mediaRecorder.ondataavailable = function(e) {
+                            audioChunks.push(e.data);
+                        };
+
+                        mediaRecorder.onstop = function() {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                            const formData = new FormData();
+                            formData.append('audio', audioBlob);
+
+                            fetch('/ask_question', {
+                                method: 'POST',
+                                body: formData
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.audio) {
+                                    responseAudio.src = data.audio;
+                                    responseAudio.play();
+                                }
+                            })
+                            .catch(err => console.error(err));
+                        };
+
+                        setTimeout(() => {
+                            mediaRecorder.stop();
+                        }, 5000); // Record for 5 seconds
+                    })
+                    .catch(err => console.error(err));
+            }
+        });
+    </script>
+</body>
+</html>
