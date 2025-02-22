@@ -2,7 +2,7 @@
 Demo:
 https://youtu.be/xmKQ9Jw_2Fw
 
-###Inspiration
+### Inspiration
 
 What do you think is the most effective incentive to make people behave more sustainably? If you think it’s money, me too! But apparently we’re wrong. Multiple peer-reviewed research has shown that social framings are more effective than financial. For instance a paper by Asensio & Delmas from the Journal of Economic Behavior & Organization showed that wordings that frames energy savings with information disclosures about the environmental and health implications have a longer impact than ones that disclose the financial savings. Multiple other papers also found the same phenomenon. (link) (link)
 
@@ -10,7 +10,7 @@ Additionally a lot of people want to make a change to make their lives more sust
 
 This approach leverages psychological principles of incrementalism and ease, where simpler, less demanding steps lead to greater sustainable behaviors.
 
-###What it does
+### What it does
 
 This website helps recommend the easiest "first steps" according to each user's preference and use the research recommended framing to highlight the impact. Such as highlighting the health impacts that they saved.
 
@@ -20,7 +20,7 @@ Then we will forward the user to a page where they can view more information abo
 
 Finally, they will be shown to the thank you page where it'll highlight the health and environmental impact that you might've saved by doing these small steps.
 
-###How we built it
+### How we built it
 
 Hyperbolic AI Inference:
 
@@ -37,7 +37,7 @@ What's next for ReduceNow
 
 This is a very simple version, but I think the principle of it can be scaled widely to help make incremental changes for people to be more sustainable. For instance, in companies, it can be used to help find the easiest and most cost-effective ways for processes or employees to reduce their emissions. Or it can be implemented in educational institutions to help build the sustainable habit.
 
-###Challenges we ran into
+### Challenges we ran into
 
 Initially we wanted to add a voice component to as an option, but ran into an issue with pyaudio and audio playback, therefore we had to scrap it. Additionally it's my first solo project on a hackathon so finishing everything was a huge personal accomplishment haha.
 
